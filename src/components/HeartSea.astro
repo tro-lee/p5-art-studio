@@ -1,0 +1,204 @@
+<main></main>
+
+<script>
+  import p5 from "p5";
+
+  // 全局配置对象
+  const config = {
+    // 画布设置
+    canvas: {
+      backgroundColor: [240, 248, 255] as [number, number, number], // 背景颜色
+    },
+    // 爱心设置
+    heart: {
+      color: [255, 192, 203, 150] as [number, number, number, number], // 爱心颜色 [R, G, B, Alpha]
+      baseSize: 3.8, // 基础大小
+      spacing: 60, // 爱心间距
+      verticalSpacingReduction: 20, // 垂直间距减少量
+      rowOffset: 40, // 行错位偏移量
+      smoothness: 0.1, // 爱心曲线平滑度
+      extraRows: 10, // 额外的行数
+      extraCols: 1, // 额外的列数
+    },
+    // 风效果设置
+    wind: {
+      speed: 0.06, // 风的速度
+      strength: 0.4, // 风的强度
+      phaseColFactor: 0.2, // 列相位因子
+      phaseRowFactor: 0.3, // 行相位因子
+    },
+    // 文本设置
+    text: {
+      mainChar: "張", // 主要显示的字符
+      mainCharSize: 140, // 主要字符大小
+      mainCharColor: [255, 255, 255, 255] as [number, number, number, number], // 主要字符颜色
+      secondaryText: "Love", // 次要文本
+      secondaryTextSize: 120, // 次要文本大小
+      secondaryTextColor: [255, 255, 255, 100] as [
+        number,
+        number,
+        number,
+        number,
+      ], // 次要文本颜色
+      secondaryTextOffset: 80, // 次要文本偏移量
+      font: "Georgia", // 字体
+    },
+  };
+
+  function drawHeart(
+    s: p5,
+    x: number,
+    y: number,
+    size: number = config.heart.baseSize,
+    smoothness: number = config.heart.smoothness,
+    color: [number, number, number, number] = config.heart.color
+  ) {
+    s.push();
+    s.translate(x, y);
+    s.beginShape();
+    s.noStroke();
+    s.fill(color[0], color[1], color[2], color[3]); // 使用配置的颜色
+
+    // 左半边
+    for (let angle = -Math.PI; angle <= 0; angle += smoothness) {
+      let heartX = 16 * Math.pow(Math.sin(angle), 3);
+      let heartY = -(
+        13 * Math.cos(angle) -
+        5 * Math.cos(2 * angle) -
+        2 * Math.cos(3 * angle) -
+        Math.cos(4 * angle)
+      );
+      s.vertex(heartX * size, heartY * size);
+    }
+
+    // 右半边
+    for (let angle = 0; angle <= Math.PI; angle += smoothness) {
+      let heartX = 16 * Math.pow(Math.sin(angle), 3);
+      let heartY = -(
+        13 * Math.cos(angle) -
+        5 * Math.cos(2 * angle) -
+        2 * Math.cos(3 * angle) -
+        Math.cos(4 * angle)
+      );
+      s.vertex(heartX * size, heartY * size);
+    }
+
+    s.endShape();
+    s.pop();
+  }
+
+  function sketch(s: p5) {
+    // 存储每个爱心的大小状态
+    let hearts: { size: number; phase: number }[][] = [];
+    let rows: number;
+    let cols: number;
+    let windTime = 0;
+
+    // 初始化或重新初始化爱心网格
+    function initHearts() {
+      rows =
+        Math.ceil(s.windowHeight / config.heart.spacing) +
+        config.heart.extraRows;
+      cols =
+        Math.ceil(s.windowWidth / config.heart.spacing) +
+        config.heart.extraCols;
+
+      hearts = [];
+      for (let row = 0; row < rows; row++) {
+        hearts[row] = [];
+        for (let col = 0; col < cols; col++) {
+          hearts[row][col] = {
+            size: 1,
+            phase:
+              col * config.wind.phaseColFactor +
+              row * config.wind.phaseRowFactor,
+          };
+        }
+      }
+    }
+
+    s.setup = () => {
+      s.createCanvas(s.windowWidth, s.windowHeight);
+      initHearts(); // 初始化爱心网格
+    };
+
+    // 窗口大小改变时的处理函数
+    s.windowResized = () => {
+      s.resizeCanvas(s.windowWidth, s.windowHeight);
+      initHearts(); // 重新初始化爱心网格以适应新的窗口大小
+    };
+
+    s.draw = () => {
+      const bgColor = config.canvas.backgroundColor;
+      s.background(bgColor[0], bgColor[1], bgColor[2]);
+
+      // 更新风的时间
+      windTime += config.wind.speed;
+
+      // 更新并绘制每个爱心
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const x =
+            col * config.heart.spacing + (row % 2 ? config.heart.rowOffset : 0);
+          const y =
+            row *
+            (config.heart.spacing - config.heart.verticalSpacingReduction);
+
+          // 计算风的效果 - 使用正弦波模拟风的波浪
+          const windEffect = Math.sin(windTime + hearts[row][col].phase);
+
+          // 动态更新大小，模拟风吹过的效果
+          hearts[row][col].size = 1 + config.wind.strength * windEffect;
+
+          // 绘制爱心
+          drawHeart(
+            s,
+            x,
+            y,
+            config.heart.baseSize * hearts[row][col].size,
+            config.heart.smoothness
+          );
+        }
+      }
+
+      // 绘制文本
+      function drawText() {
+        s.push();
+        s.textStyle(s.BOLD);
+        s.textFont(config.text.font);
+        s.textAlign(s.CENTER, s.CENTER);
+
+        // 绘制主要字符
+        const mainColor = config.text.mainCharColor;
+        s.fill(mainColor[0], mainColor[1], mainColor[2], mainColor[3]);
+        s.textSize(config.text.mainCharSize);
+        s.text(config.text.mainChar, s.width / 2, s.height / 2);
+
+        // 绘制次要文本
+        const secondaryColor = config.text.secondaryTextColor;
+        s.fill(
+          secondaryColor[0],
+          secondaryColor[1],
+          secondaryColor[2],
+          secondaryColor[3]
+        );
+        s.textSize(config.text.secondaryTextSize);
+        s.text(config.text.secondaryText, s.width / 2, s.height / 2);
+        s.text(
+          config.text.secondaryText,
+          s.width / 2,
+          s.height / 2 - config.text.secondaryTextOffset
+        );
+        s.text(
+          config.text.secondaryText,
+          s.width / 2,
+          s.height / 2 + config.text.secondaryTextOffset
+        );
+        s.pop();
+      }
+      drawText();
+    };
+  }
+
+  new p5(sketch);
+</script>
