@@ -1,0 +1,397 @@
+<main></main>
+
+<script>
+  import p5 from "p5";
+
+  function sketch(s: p5) {
+    // 可配置参数
+    const config = {
+      eye: {
+        baseSize: 1,
+        whiteRadius: 60,
+        blackRadius: 40,
+        maxOffset: 10,
+        minPupilSize: 0.9,
+        position: {
+          x: s.windowWidth / 2 -20,
+          y: s.windowHeight / 2 -20,
+          isDragging: false,
+          dragOffsetX: 0,
+          dragOffsetY: 0
+        }
+      },
+      beam: {
+        color: [255, 255, 0, 100] as [number, number, number, number], // 半透明黄色
+        angle: 0.3, // 光束扩散角度
+        enabled: true, // 是否启用光束
+      },
+      particles: {
+        count: 30, // 粒子数量
+        minSize: 2, // 最小粒子大小
+        maxSize: 5, // 最大粒子大小
+        speed: 2, // 粒子移动速度
+        color: [0, 0, 0] as [number, number, number], // 粒子颜色
+      },
+      content: {
+        enabled: true,
+        text: "Hello, World!",
+        font: "Arial",
+        fontSize: 64,
+        color: [0, 0, 0],
+        x: s.windowWidth / 2,
+        y: 100,
+      },
+    };
+
+    // 粒子类
+    class Particle {
+      x: number = 0;
+      y: number = 0;
+      size: number = 0;
+      speed: number = 0;
+      angle: number = 0;
+      alpha: number = 0;
+
+      constructor() {
+        this.reset();
+        // 随机初始位置
+        this.x = s.random(0, s.windowWidth);
+        this.y = s.random(0, s.windowHeight);
+      }
+
+      reset() {
+        this.size = s.random(
+          config.particles.minSize,
+          config.particles.maxSize
+        );
+        this.speed = s.random(0.5, config.particles.speed);
+        this.angle = s.random(0, Math.PI * 2);
+        this.alpha = s.random(50, 150);
+      }
+
+      update(beamAngle: number, beamOriginX: number, beamOriginY: number) {
+        // 移动粒子
+        this.x += Math.cos(this.angle) * this.speed;
+        this.y += Math.sin(this.angle) * this.speed;
+
+        // 检查是否在光束范围内
+        const angleToParticle = Math.atan2(
+          this.y - beamOriginY,
+          this.x - beamOriginX
+        );
+        const angleDiff = s.abs(
+          ((angleToParticle - beamAngle + Math.PI * 2) % (Math.PI * 2)) -
+            Math.PI
+        );
+
+        // 如果粒子不在光束范围内，降低透明度
+        if (angleDiff > config.beam.angle) {
+          this.alpha = Math.max(0, this.alpha - 2);
+        } else {
+          this.alpha = Math.min(150, this.alpha + 5);
+        }
+
+        // 如果粒子移出屏幕或完全透明，重置它
+        if (
+          this.x < 0 ||
+          this.x > s.windowWidth ||
+          this.y < 0 ||
+          this.y > s.windowHeight ||
+          this.alpha <= 0
+        ) {
+          this.reset();
+          // 在光束范围内重新生成
+          const randomAngle =
+            beamAngle + s.random(-config.beam.angle, config.beam.angle);
+          const distance = s.random(0, s.windowWidth);
+          this.x = beamOriginX + Math.cos(randomAngle) * distance;
+          this.y = beamOriginY + Math.sin(randomAngle) * distance;
+        }
+      }
+
+      draw() {
+        s.push();
+        s.noStroke();
+        s.fill(
+          config.particles.color[0],
+          config.particles.color[1],
+          config.particles.color[2],
+          this.alpha
+        );
+        s.ellipse(this.x, this.y, this.size, this.size);
+        s.pop();
+      }
+    }
+
+    // 创建粒子数组
+    let particles: Particle[] = [];
+
+    s.setup = () => {
+      s.createCanvas(s.windowWidth, s.windowHeight);
+      // 初始化粒子
+      for (let i = 0; i < config.particles.count; i++) {
+        particles.push(new Particle());
+      }
+    };
+
+    // 检查鼠标是否在眼睛范围内
+    function isMouseOverEye() {
+      const d = s.dist(
+        config.eye.position.x,
+        config.eye.position.y,
+        s.mouseX,
+        s.mouseY
+      );
+      return d < (config.eye.baseSize * config.eye.whiteRadius) / 2;
+    }
+
+    // 绘制眼睛
+    function drawEye() {
+      const d = s.dist(
+        config.eye.position.x,
+        config.eye.position.y,
+        s.mouseX,
+        s.mouseY
+      );
+
+      // 眼白部分
+      s.fill("white");
+      if (isMouseOverEye() && !config.eye.position.isDragging) {
+        s.cursor(s.HAND); // 当鼠标悬停在眼睛上时显示手型光标
+      } else {
+        s.cursor(s.ARROW);
+      }
+      s.ellipse(
+        config.eye.position.x,
+        config.eye.position.y,
+        config.eye.baseSize * config.eye.whiteRadius,
+        config.eye.baseSize * config.eye.whiteRadius
+      );
+
+      // 计算瞳孔缩放比例
+      const size =
+        config.eye.baseSize *
+        s.map(
+          d,
+          0,
+          Math.min(s.windowWidth, s.windowHeight) / 4,
+          1.5,
+          config.eye.minPupilSize,
+          true
+        );
+
+      // 计算瞳孔偏移量
+      const offsetX = s.map(
+        s.mouseX - config.eye.position.x,
+        -s.windowWidth / 2,
+        s.windowWidth / 2,
+        -config.eye.maxOffset,
+        config.eye.maxOffset,
+        true
+      );
+
+      const offsetY = s.map(
+        s.mouseY - config.eye.position.y,
+        -s.windowHeight / 2,
+        s.windowHeight / 2,
+        -config.eye.maxOffset,
+        config.eye.maxOffset,
+        true
+      );
+
+      // 眼黑部分
+      s.fill("black");
+      s.ellipse(
+        config.eye.position.x + offsetX,
+        config.eye.position.y + offsetY,
+        size * config.eye.blackRadius,
+        size * config.eye.blackRadius
+      );
+
+      // 返回当前瞳孔位置，用于光束起点
+      return {
+        x: config.eye.position.x + offsetX,
+        y: config.eye.position.y + offsetY,
+      };
+    }
+
+    // 绘制光束
+    function drawBeam(eyeX: number, eyeY: number) {
+      if (!config.beam.enabled) return;
+
+      s.push();
+      const d = s.dist(eyeX, eyeY, s.mouseX, s.mouseY);
+      const maxDist = Math.min(s.windowWidth, s.windowHeight) / 2;
+
+      s.fill(
+        config.beam.color[0],
+        config.beam.color[1],
+        config.beam.color[2],
+        s.map(
+          d,
+          0,
+          Math.min(s.windowWidth, s.windowHeight) / 4,
+          0,
+          config.beam.color[3],
+        )
+      );
+      s.noStroke();
+
+      // 计算光束方向
+      const angle = Math.atan2(s.mouseY - eyeY, s.mouseX - eyeX);
+
+      // 根据鼠标距离计算光束角度
+      const beamAngle = s.map(
+        d,
+        0,
+        maxDist,
+        config.beam.angle * 2, // 近距离时角度大
+        config.beam.angle * 0.5, // 远距离时角度小
+        true
+      );
+
+      // 三角形的三个顶点
+      const x1 = eyeX;
+      const y1 = eyeY;
+      const x2 = x1 + Math.cos(angle - beamAngle) * s.windowWidth * 20;
+      const y2 = y1 + Math.sin(angle - beamAngle) * s.windowWidth * 20;
+      const x3 = x1 + Math.cos(angle + beamAngle) * s.windowWidth * 20;
+      const y3 = y1 + Math.sin(angle + beamAngle) * s.windowWidth * 20;
+
+      // 绘制三角形
+      s.triangle(x1, y1, x2, y2, x3, y3);
+
+      // 更新粒子
+      particles.forEach((particle) => {
+        particle.update(angle, eyeX, eyeY);
+        particle.draw();
+      });
+      s.pop();
+
+      return angle;
+    }
+
+    s.draw = () => {
+      s.background("black");
+      s.push();
+
+      // 处理拖拽
+      if (config.eye.position.isDragging) {
+        config.eye.position.x = s.mouseX - config.eye.position.dragOffsetX;
+        config.eye.position.y = s.mouseY - config.eye.position.dragOffsetY;
+      }
+
+      // 先绘制光束（在眼睛下方）
+      if (config.beam.enabled) {
+        const pupilPos = {
+          x:
+            config.eye.position.x +
+            s.map(
+              s.mouseX - config.eye.position.x,
+              -s.windowWidth / 2,
+              s.windowWidth / 2,
+              -config.eye.maxOffset,
+              config.eye.maxOffset,
+              true
+            ),
+          y:
+            config.eye.position.y +
+            s.map(
+              s.mouseY - config.eye.position.y,
+              -s.windowHeight / 2,
+              s.windowHeight / 2,
+              -config.eye.maxOffset,
+              config.eye.maxOffset,
+              true
+            ),
+        };
+        drawBeam(pupilPos.x, pupilPos.y);
+      }
+
+      // 再绘制眼睛
+      drawEye();
+
+      // 绘制内容
+      if (config.content.enabled) {
+        s.push();
+        s.textAlign(s.CENTER, s.CENTER);
+        s.textFont(config.content.font);
+        s.textSize(config.content.fontSize);
+        s.fill(
+          config.content.color[0],
+          config.content.color[1],
+          config.content.color[2]
+        );
+        s.text(config.content.text, config.content.x, config.content.y);
+        s.pop();
+      }
+
+      s.pop();
+    };
+
+    s.windowResized = () => {
+      s.resizeCanvas(s.windowWidth, s.windowHeight);
+      // 更新内容位置
+      config.content.x = s.windowWidth / 2;
+    };
+
+    // 鼠标按下事件
+    s.mousePressed = () => {
+      if (isMouseOverEye()) {
+        config.eye.position.isDragging = true;
+        config.eye.position.dragOffsetX = s.mouseX - config.eye.position.x;
+        config.eye.position.dragOffsetY = s.mouseY - config.eye.position.y;
+      }
+    };
+
+    // 鼠标释放事件
+    s.mouseReleased = () => {
+      config.eye.position.isDragging = false;
+    };
+
+    // 键盘控制
+    s.keyPressed = () => {
+      const moveStep = 10; // 移动步长
+
+      // 方向键移动眼睛
+      if (s.keyCode === s.LEFT_ARROW && s.keyIsDown(s.SHIFT)) {
+        config.eye.position.x -= moveStep;
+      }
+      if (s.keyCode === s.RIGHT_ARROW && s.keyIsDown(s.SHIFT)) {
+        config.eye.position.x += moveStep;
+      }
+      if (s.keyCode === s.UP_ARROW && s.keyIsDown(s.SHIFT)) {
+        config.eye.position.y -= moveStep;
+      }
+      if (s.keyCode === s.DOWN_ARROW && s.keyIsDown(s.SHIFT)) {
+        config.eye.position.y += moveStep;
+      }
+
+      // 原有的光束控制（不按Shift时）
+      if (!s.keyIsDown(s.SHIFT)) {
+        // 按B键切换光束
+        if (s.key === "b" || s.key === "B") {
+          config.beam.enabled = !config.beam.enabled;
+        }
+
+        // 按+/-键调整眼睛大小
+        if (s.key === "=" || s.key === "+") {
+          config.eye.baseSize += 0.1;
+        }
+        if (s.key === "-" || s.key === "_") {
+          config.eye.baseSize = Math.max(0.1, config.eye.baseSize - 0.1);
+        }
+
+        // 按左右箭头键调整光束角度
+        if (s.keyCode === s.LEFT_ARROW) {
+          config.beam.angle = Math.max(0.1, config.beam.angle - 0.05);
+        }
+        if (s.keyCode === s.RIGHT_ARROW) {
+          config.beam.angle = Math.min(0.6, config.beam.angle + 0.05);
+        }
+      }
+    };
+  }
+
+  new p5(sketch);
+</script>
